@@ -20,18 +20,31 @@ function login() {
     const key = document.getElementById('adminKey').value.trim();
     if (!key) return;
 
-    fetch(`${API_URL}/0`, {
+    const btn = document.querySelector('#loginOverlay .btn-primary');
+    if (btn) { btn.disabled = true; btn.textContent = 'Verificando…'; }
+
+    fetch(`${API_PEDIDOS}?estado=pendiente`, {
         method: 'GET',
-        headers: { 'X-Admin-Key': key }
-    }).then(async () => {
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Key': key
+        }
+    }).then(async res => {
+        const data = await res.json();
+        if (!data.ok) {
+            showLoginError('Clave incorrecta. Intentá de nuevo.');
+            return;
+        }
         isLoggedIn = true;
         sessionStorage.setItem('adminKey', key);
         document.getElementById('loginOverlay').style.display = 'none';
         document.getElementById('adminLayout').style.display  = 'flex';
         loadProducts();
-        loadPedidosBadge();
+        updateBadgePendientes(data.data ? data.data.length : 0);
     }).catch(() => {
         showLoginError('No se pudo conectar con el servidor.');
+    }).finally(() => {
+        if (btn) { btn.disabled = false; btn.textContent = 'Ingresar'; }
     });
 }
 
@@ -59,7 +72,24 @@ window.addEventListener('DOMContentLoaded', () => {
     const saved = sessionStorage.getItem('adminKey');
     if (saved) {
         document.getElementById('adminKey').value = saved;
-        login();
+        // Verificar que la sesión guardada sigue siendo válida
+        fetch(`${API_PEDIDOS}?estado=pendiente`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json', 'X-Admin-Key': saved }
+        }).then(async res => {
+            const data = await res.json();
+            if (data.ok) {
+                isLoggedIn = true;
+                document.getElementById('loginOverlay').style.display = 'none';
+                document.getElementById('adminLayout').style.display  = 'flex';
+                loadProducts();
+                updateBadgePendientes(data.data ? data.data.length : 0);
+            } else {
+                sessionStorage.removeItem('adminKey');
+            }
+        }).catch(() => {
+            sessionStorage.removeItem('adminKey');
+        });
     }
 });
 
