@@ -1,17 +1,18 @@
 /* =====================================================
    SUPERMERCADO LÍDER — Tienda
-   Carga productos desde la API PHP + MySQL
    ===================================================== */
 
-const API_URL = 'api.php/productos'; // ← mismo path que admin.js
+const API_URL      = 'api.php/productos';
+const API_PEDIDOS  = 'api.php/pedidos';
 
 const categoryLabels = {
-    all:      'Todos los productos',
-    frutas:   'Frutas',
-    verduras: 'Verduras',
-    bebidas:  'Bebidas',
-    limpieza: 'Limpieza',
-    otros:    'Otros',
+    all:       'Todos los productos',
+    frutas:    'Frutas',
+    verduras:  'Verduras',
+    bebidas:   'Bebidas',
+    limpieza:  'Limpieza',
+    panaderia: 'Panadería',
+    otros:     'Otros',
 };
 
 let productsData    = [];
@@ -61,7 +62,7 @@ function updateFilterCounts() {
    ===================================================== */
 
 function renderProducts(filter = currentCategory, searchTerm = '') {
-    const container   = document.getElementById('productsContainer');
+    const container    = document.getElementById('productsContainer');
     const sectionTitle = document.getElementById('sectionTitle');
     const sectionCount = document.getElementById('sectionCount');
     if (!container) return;
@@ -91,10 +92,17 @@ function renderProducts(filter = currentCategory, searchTerm = '') {
         const card = document.createElement('div');
         card.className = 'product-card';
         card.style.animationDelay = `${i * 40}ms`;
+
+        // Si el icono es una imagen (base64 o URL) mostrarla, si no mostrar el emoji
+        const isImg = product.icono && (product.icono.startsWith('data:') || product.icono.startsWith('http'));
+        const imageContent = isImg
+            ? `<img src="${product.icono}" alt="${product.nombre}" class="product-img-real">`
+            : product.icono;
+
         card.innerHTML = `
             <div class="product-image-wrap">
                 <div class="product-image cat-${product.categoria}" role="img" aria-label="${product.nombre}">
-                    ${product.icono}
+                    ${imageContent}
                 </div>
                 <span class="product-badge">${categoryLabels[product.categoria] || product.categoria}</span>
             </div>
@@ -141,7 +149,7 @@ function addToCart(productId) {
 
     saveCart();
     animateCartBtn();
-    showToast(`${product.icono} ${product.nombre} agregado al carrito`);
+    showToast(`${product.icono && product.icono.startsWith('data:') ? '🛒' : (product.icono || '🛒')} ${product.nombre} agregado al carrito`);
 }
 
 function animateCartBtn() {
@@ -193,10 +201,17 @@ function renderCartItems() {
     cart.forEach(item => {
         const itemTotal = Number(item.precio) * item.quantity;
         total += itemTotal;
+
+        // Imagen o emoji
+        const isImg = item.icono && (item.icono.startsWith('data:') || item.icono.startsWith('http'));
+        const iconContent = isImg
+            ? `<img src="${item.icono}" alt="${item.nombre}" class="cart-item-img-real">`
+            : item.icono;
+
         const div = document.createElement('div');
         div.className = 'cart-item';
         div.innerHTML = `
-            <div class="cart-item-emoji cat-${item.categoria}">${item.icono}</div>
+            <div class="cart-item-emoji cat-${item.categoria}">${iconContent}</div>
             <div class="cart-item-info">
                 <h4>${item.nombre}</h4>
                 <p>$${Number(item.precio).toLocaleString('es-AR')} c/u</p>
@@ -213,7 +228,7 @@ function renderCartItems() {
     });
 
     if (totalEl) totalEl.textContent = total.toLocaleString('es-AR');
-    if (footer) footer.style.display = 'block';
+    if (footer)  footer.style.display = 'block';
 }
 
 function updateQuantity(productId, change) {
@@ -238,23 +253,68 @@ function saveCart() {
     updateCartCount();
 }
 
-function checkout() {
+/* =====================================================
+   CHECKOUT — Envía el pedido a la API
+   ===================================================== */
+
+async function checkout() {
     if (!cart.length) return;
-    showToast('¡Gracias por tu compra en Supermercado Líder! 🎉');
-    cart = [];
-    saveCart();
-    toggleCart();
+
+    // Obtener nombre del cliente
+    const clienteInput = document.getElementById('clienteNombre');
+    const cliente = clienteInput ? clienteInput.value.trim() : '';
+
+    if (!cliente) {
+        // Resaltar el campo si está vacío
+        if (clienteInput) {
+            clienteInput.focus();
+            clienteInput.classList.add('input-error');
+            setTimeout(() => clienteInput.classList.remove('input-error'), 2000);
+        }
+        showToast('⚠️ Por favor ingresá tu nombre antes de confirmar.', true);
+        return;
+    }
+
+    const total = cart.reduce((s, i) => s + Number(i.precio) * i.quantity, 0);
+
+    // Preparar items (solo los datos necesarios, sin el icono base64 pesado podría cortarse)
+    const items = cart.map(i => ({
+        id:        i.id,
+        nombre:    i.nombre,
+        precio:    i.precio,
+        categoria: i.categoria,
+        icono:     i.icono,
+        quantity:  i.quantity,
+    }));
+
+    try {
+        const res  = await fetch(API_PEDIDOS, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ cliente, items, total }),
+        });
+        const json = await res.json();
+        if (!json.ok) throw new Error(json.error);
+
+        showToast(`¡Gracias ${cliente}! Tu pedido fue enviado. 🎉`);
+        cart = [];
+        saveCart();
+        if (clienteInput) clienteInput.value = '';
+        toggleCart();
+    } catch (err) {
+        showToast('Error al enviar el pedido: ' + err.message, true);
+    }
 }
 
 /* =====================================================
    TOASTS
    ===================================================== */
 
-function showToast(message) {
+function showToast(message, isError = false) {
     const container = document.getElementById('toastContainer');
     if (!container) return;
     const toast = document.createElement('div');
-    toast.className = 'toast';
+    toast.className = `toast${isError ? ' toast-error' : ''}`;
     toast.textContent = message;
     container.appendChild(toast);
     setTimeout(() => toast.remove(), 3000);

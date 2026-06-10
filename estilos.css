@@ -457,10 +457,20 @@ header {
 }
 
 /* Colores de fondo por categoría */
-.product-image.cat-frutas   { background: linear-gradient(135deg, #FFF3E8 0%, #FFE0C0 100%); }
-.product-image.cat-verduras { background: linear-gradient(135deg, #EDFAF1 0%, #C8F0D5 100%); }
-.product-image.cat-bebidas  { background: linear-gradient(135deg, #EFF6FF 0%, #C7DCFC 100%); }
-.product-image.cat-limpieza { background: linear-gradient(135deg, #F5F0FF 0%, #DDD5FC 100%); }
+.product-image.cat-frutas    { background: linear-gradient(135deg, #FFF3E8 0%, #FFE0C0 100%); }
+.product-image.cat-verduras  { background: linear-gradient(135deg, #EDFAF1 0%, #C8F0D5 100%); }
+.product-image.cat-bebidas   { background: linear-gradient(135deg, #EFF6FF 0%, #C7DCFC 100%); }
+.product-image.cat-limpieza  { background: linear-gradient(135deg, #F5F0FF 0%, #DDD5FC 100%); }
+.product-image.cat-panaderia { background: linear-gradient(135deg, #FFF8E8 0%, #FFDFA0 100%); }
+.product-image.cat-otros     { background: linear-gradient(135deg, #F7F8FA 0%, #E4E7EC 100%); }
+
+/* Imagen real dentro de la tarjeta */
+.product-img-real {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
 
 .product-badge {
     position: absolute;
@@ -700,10 +710,21 @@ header {
     flex-shrink: 0;
 }
 
-.cart-item-emoji.cat-frutas   { background: #FFF3E8; }
-.cart-item-emoji.cat-verduras { background: #EDFAF1; }
-.cart-item-emoji.cat-bebidas  { background: #EFF6FF; }
-.cart-item-emoji.cat-limpieza { background: #F5F0FF; }
+.cart-item-emoji.cat-frutas    { background: #FFF3E8; }
+.cart-item-emoji.cat-verduras  { background: #EDFAF1; }
+.cart-item-emoji.cat-bebidas   { background: #EFF6FF; }
+.cart-item-emoji.cat-limpieza  { background: #F5F0FF; }
+.cart-item-emoji.cat-panaderia { background: #FFF8E8; }
+.cart-item-emoji.cat-otros     { background: var(--gris-100); }
+
+/* Imagen real dentro del carrito */
+.cart-item-img-real {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 8px;
+    display: block;
+}
 
 .cart-item-info {
     flex: 1;
@@ -832,6 +853,53 @@ header {
 
 .pay-btn:hover { background: var(--verde-hover); }
 .pay-btn:active { transform: scale(0.98); }
+
+/* Campo nombre del cliente en el carrito */
+.cliente-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.cliente-field label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--gris-600);
+}
+
+.cliente-field input {
+    padding: 10px 14px;
+    border: 1.5px solid var(--gris-200);
+    border-radius: 10px;
+    font-size: 0.92rem;
+    color: var(--oscuro);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    background: var(--fondo);
+}
+
+.cliente-field input:focus {
+    border-color: var(--verde);
+    box-shadow: 0 0 0 3px rgba(22,163,74,0.12);
+}
+
+.cliente-field input.input-error {
+    border-color: var(--rojo);
+    box-shadow: 0 0 0 3px rgba(213,43,30,0.12);
+    animation: shake 0.3s ease;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25%       { transform: translateX(-6px); }
+    75%       { transform: translateX(6px); }
+}
+
+/* Toast de error */
+.toast.toast-error {
+    border-left-color: var(--rojo);
+}
 
 /* =====================================================
    TOAST
