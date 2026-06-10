@@ -93,21 +93,42 @@ function validateProduct(array $data): array {
 }
 
 // --- ROUTER ---
+// Funciona con CUALQUIER servidor: usa PATH_INFO, REQUEST_URI o query string
 $method = $_SERVER['REQUEST_METHOD'];
 
-// Intentar con PATH_INFO primero (cuando la URL es api.php/productos/1)
-if (isset($_SERVER['PATH_INFO']) && $_SERVER['PATH_INFO'] !== '') {
-    $pathInfo = trim($_SERVER['PATH_INFO'], '/');
-    $parts    = explode('/', $pathInfo);
+$resource = '';
+$id       = null;
+
+// Método 1: PATH_INFO (api.php/productos/1)
+if (!empty($_SERVER['PATH_INFO'])) {
+    $parts    = explode('/', trim($_SERVER['PATH_INFO'], '/'));
     $resource = $parts[0] ?? '';
     $id       = isset($parts[1]) && is_numeric($parts[1]) ? (int)$parts[1] : null;
-} else {
-    // Fallback: query string (?recurso=pedidos&id=1&estado=pendiente)
-    $resource = $_GET['recurso'] ?? '';
+}
+
+// Método 2: REQUEST_URI — buscar "productos" o "pedidos" en la URL
+if (empty($resource)) {
+    $uri   = $_SERVER['REQUEST_URI'] ?? '';
+    $clean = parse_url($uri, PHP_URL_PATH);
+    $parts = explode('/', trim($clean, '/'));
+    foreach ($parts as $i => $part) {
+        if ($part === 'productos' || $part === 'pedidos') {
+            $resource = $part;
+            $id = isset($parts[$i+1]) && is_numeric($parts[$i+1]) ? (int)$parts[$i+1] : null;
+            break;
+        }
+    }
+}
+
+// Método 3: query string (?recurso=pedidos&id=1)  ← más compatible
+if (empty($resource) && !empty($_GET['recurso'])) {
+    $resource = $_GET['recurso'];
     $id       = isset($_GET['id']) && is_numeric($_GET['id']) ? (int)$_GET['id'] : null;
 }
 
-if (!in_array($resource, ['productos', 'pedidos'])) error('Ruta no encontrada. recurso=' . $resource, 404);
+if (!in_array($resource, ['productos', 'pedidos'])) {
+    error('Ruta no encontrada. Usá: api.php?recurso=productos o api.php?recurso=pedidos', 404);
+}
 
 $db   = getDB();
 $body = json_decode(file_get_contents('php://input'), true) ?? [];

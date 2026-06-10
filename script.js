@@ -260,12 +260,10 @@ function saveCart() {
 async function checkout() {
     if (!cart.length) return;
 
-    // Obtener nombre del cliente
     const clienteInput = document.getElementById('clienteNombre');
-    const cliente = clienteInput ? clienteInput.value.trim() : '';
+    const cliente      = clienteInput ? clienteInput.value.trim() : '';
 
     if (!cliente) {
-        // Resaltar el campo si está vacío
         if (clienteInput) {
             clienteInput.focus();
             clienteInput.classList.add('input-error');
@@ -277,32 +275,48 @@ async function checkout() {
 
     const total = cart.reduce((s, i) => s + Number(i.precio) * i.quantity, 0);
 
-    // Preparar items (solo los datos necesarios, sin el icono base64 pesado podría cortarse)
+    // Acortar icono: si es base64 lo reemplazamos por emoji genérico para no sobrecargar
     const items = cart.map(i => ({
         id:        i.id,
         nombre:    i.nombre,
         precio:    i.precio,
         categoria: i.categoria,
-        icono:     i.icono,
+        icono:     (i.icono && i.icono.startsWith('data:')) ? '🖼️' : (i.icono || '📦'),
         quantity:  i.quantity,
     }));
 
+    const payload = { cliente, items, total };
+    console.log('📦 Enviando pedido a api.php?recurso=pedidos:', payload);
+
     try {
-        const res  = await fetch('api.php?recurso=pedidos', {
+        const res = await fetch('api.php?recurso=pedidos', {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ cliente, items, total }),
+            body:    JSON.stringify(payload),
         });
-        const json = await res.json();
-        if (!json.ok) throw new Error(json.error);
+
+        console.log('📡 HTTP Status:', res.status);
+        const text = await res.text();
+        console.log('📄 Respuesta:', text);
+
+        let json;
+        try {
+            json = JSON.parse(text);
+        } catch (e) {
+            throw new Error('Respuesta no válida del servidor: ' + text.substring(0, 300));
+        }
+
+        if (!json.ok) throw new Error(json.error || 'Error desconocido');
 
         showToast(`¡Gracias ${cliente}! Tu pedido fue enviado. 🎉`);
         cart = [];
         saveCart();
         if (clienteInput) clienteInput.value = '';
         toggleCart();
+
     } catch (err) {
-        showToast('Error al enviar el pedido: ' + err.message, true);
+        console.error('❌ Error checkout:', err);
+        showToast('Error: ' + err.message, true);
     }
 }
 
