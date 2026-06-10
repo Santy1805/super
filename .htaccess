@@ -1,0 +1,7 @@
+Options -Indexes
+
+# Redirigir api.php/productos y api.php/pedidos usando PATH_INFO
+# Esto le dice a Apache que pase el resto de la URL como PATH_INFO a api.php
+<Files "api.php">
+    AcceptPathInfo On
+</Files>

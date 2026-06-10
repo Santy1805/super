@@ -94,29 +94,20 @@ function validateProduct(array $data): array {
 
 // --- ROUTER ---
 $method = $_SERVER['REQUEST_METHOD'];
-$path   = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
-$parts  = explode('/', $path);
 
-$resource = '';
-$id       = null;
-
-foreach ($parts as $i => $part) {
-    if ($part === 'productos' || $part === 'pedidos') {
-        $resource = $part;
-        $id = isset($parts[$i + 1]) && is_numeric($parts[$i + 1])
-              ? (int)$parts[$i + 1]
-              : null;
-        break;
-    }
+// Intentar con PATH_INFO primero (cuando la URL es api.php/productos/1)
+if (isset($_SERVER['PATH_INFO']) && $_SERVER['PATH_INFO'] !== '') {
+    $pathInfo = trim($_SERVER['PATH_INFO'], '/');
+    $parts    = explode('/', $pathInfo);
+    $resource = $parts[0] ?? '';
+    $id       = isset($parts[1]) && is_numeric($parts[1]) ? (int)$parts[1] : null;
+} else {
+    // Fallback: query string (?recurso=pedidos&id=1&estado=pendiente)
+    $resource = $_GET['recurso'] ?? '';
+    $id       = isset($_GET['id']) && is_numeric($_GET['id']) ? (int)$_GET['id'] : null;
 }
 
-// Soporte alternativo con query string
-if (!$resource && isset($_GET['recurso'])) {
-    $resource = $_GET['recurso'];
-    $id       = isset($_GET['id']) ? (int)$_GET['id'] : null;
-}
-
-if (!in_array($resource, ['productos', 'pedidos'])) error('Ruta no encontrada.', 404);
+if (!in_array($resource, ['productos', 'pedidos'])) error('Ruta no encontrada. recurso=' . $resource, 404);
 
 $db   = getDB();
 $body = json_decode(file_get_contents('php://input'), true) ?? [];

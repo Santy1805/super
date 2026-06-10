@@ -288,7 +288,7 @@ async function checkout() {
     }));
 
     try {
-        const res  = await fetch(API_PEDIDOS, {
+        const res  = await fetch('api.php?recurso=pedidos', {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
             body:    JSON.stringify({ cliente, items, total }),

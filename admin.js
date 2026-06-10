@@ -2,9 +2,9 @@
    SUPERMERCADO LÍDER — Panel Admin
    ===================================================== */
 
-const API_URL   = 'api.php/productos';
+const API_URL     = 'api.php/productos';
 const API_PEDIDOS = 'api.php/pedidos';
-const ADMIN_KEY = 'lider2024';
+const ADMIN_KEY   = 'lider2024';
 
 let products    = [];
 let editingId   = null;
@@ -461,7 +461,14 @@ async function loadPedidos(estado) {
     container.innerHTML = '<div class="orders-loading">Cargando pedidos…</div>';
 
     try {
-        const pedidos = await apiPedidosFetch(`?estado=${estado}`, { method: 'GET' });
+        // Usamos query string para máxima compatibilidad con servidores Apache
+        const res  = await fetch(`api.php?recurso=pedidos&estado=${estado}`, {
+            method:  'GET',
+            headers: { 'X-Admin-Key': getKey() },
+        });
+        const json = await res.json();
+        if (!json.ok) throw new Error(json.error || 'Error al cargar pedidos');
+        const pedidos = json.data;
         renderPedidos(pedidos, estado, container);
         if (estado === 'pendiente') updateBadgePendientes(pedidos.length);
     } catch (err) {
@@ -471,8 +478,12 @@ async function loadPedidos(estado) {
 
 async function loadPedidosBadge() {
     try {
-        const pedidos = await apiPedidosFetch('?estado=pendiente', { method: 'GET' });
-        updateBadgePendientes(pedidos.length);
+        const res  = await fetch('api.php?recurso=pedidos&estado=pendiente', {
+            method:  'GET',
+            headers: { 'X-Admin-Key': getKey() },
+        });
+        const json = await res.json();
+        if (json.ok) updateBadgePendientes(json.data.length);
     } catch (_) {}
 }
 
@@ -547,10 +558,13 @@ function renderPedidos(pedidos, estado, container) {
 
 async function marcarEntregado(id) {
     try {
-        await apiPedidosFetch(`/${id}`, {
-            method: 'PUT',
-            body: JSON.stringify({ estado: 'entregado' })
+        const res  = await fetch(`api.php?recurso=pedidos&id=${id}`, {
+            method:  'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-Admin-Key': getKey() },
+            body:    JSON.stringify({ estado: 'entregado' }),
         });
+        const json = await res.json();
+        if (!json.ok) throw new Error(json.error);
         showToast('✅ Pedido marcado como entregado.');
         loadPedidos('pendiente');
         loadPedidosBadge();
@@ -561,10 +575,13 @@ async function marcarEntregado(id) {
 
 async function marcarPendiente(id) {
     try {
-        await apiPedidosFetch(`/${id}`, {
-            method: 'PUT',
-            body: JSON.stringify({ estado: 'pendiente' })
+        const res  = await fetch(`api.php?recurso=pedidos&id=${id}`, {
+            method:  'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-Admin-Key': getKey() },
+            body:    JSON.stringify({ estado: 'pendiente' }),
         });
+        const json = await res.json();
+        if (!json.ok) throw new Error(json.error);
         showToast('↩ Pedido vuelto a pendiente.');
         loadPedidos('entregado');
         loadPedidosBadge();
@@ -578,9 +595,13 @@ function confirmarEliminarPedido(id) {
     document.getElementById('confirmModal').style.display = 'flex';
     confirmCb = async () => {
         try {
-            await apiPedidosFetch(`/${id}`, { method: 'DELETE' });
+            const res  = await fetch(`api.php?recurso=pedidos&id=${id}`, {
+                method:  'DELETE',
+                headers: { 'X-Admin-Key': getKey() },
+            });
+            const json = await res.json();
+            if (!json.ok) throw new Error(json.error);
             showToast('🗑️ Pedido eliminado.');
-            // Refrescar la vista activa
             const viewPend = document.getElementById('view-pendientes');
             const viewEntr = document.getElementById('view-entregados');
             if (viewPend && viewPend.style.display !== 'none') loadPedidos('pendiente');
