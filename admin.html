@@ -43,6 +43,14 @@
                 <button class="nav-item" onclick="setView('nuevo')" id="nav-nuevo">
                     <span class="nav-icon">➕</span> Nuevo producto
                 </button>
+                <div class="nav-separator"></div>
+                <button class="nav-item" onclick="setView('pendientes')" id="nav-pendientes">
+                    <span class="nav-icon">🕐</span> Pedidos pendientes
+                    <span class="nav-badge" id="badgePendientes" style="display:none">0</span>
+                </button>
+                <button class="nav-item" onclick="setView('entregados')" id="nav-entregados">
+                    <span class="nav-icon">✅</span> Pedidos entregados
+                </button>
             </nav>
 
             <div class="sidebar-footer">
@@ -98,6 +106,7 @@
                         <option value="verduras">🥬 Verduras</option>
                         <option value="bebidas">🥤 Bebidas</option>
                         <option value="limpieza">🧴 Limpieza</option>
+                        <option value="panaderia">🍞 Panadería</option>
                         <option value="otros">📦 Otros</option>
                     </select>
                 </div>
@@ -120,7 +129,7 @@
                 </div>
             </section>
 
-            <!-- VISTA: FORMULARIO -->
+            <!-- VISTA: FORMULARIO PRODUCTO -->
             <section class="view" id="view-nuevo" style="display:none">
                 <div class="form-layout">
                     <div class="form-card">
@@ -141,24 +150,36 @@
 
                             <div class="field-group">
                                 <label for="f-categoria">Categoría</label>
-                                <select id="f-categoria">
+                                <select id="f-categoria" onchange="updatePreview()">
                                     <option value="">— Seleccioná —</option>
                                     <option value="frutas">🍎 Frutas</option>
                                     <option value="verduras">🥬 Verduras</option>
                                     <option value="bebidas">🥤 Bebidas</option>
                                     <option value="limpieza">🧴 Limpieza</option>
+                                    <option value="panaderia">🍞 Panadería</option>
                                     <option value="otros">📦 Otros</option>
                                 </select>
                                 <span class="field-error" id="e-categoria"></span>
                             </div>
 
-                            <div class="field-group">
-                                <label for="f-icono">Ícono (emoji)</label>
-                                <div class="emoji-field">
-                                    <input type="text" id="f-icono" placeholder="📦" maxlength="4"
-                                           oninput="updatePreview()">
-                                    <div class="emoji-picker" id="emojiPicker"></div>
+                            <!-- IMAGEN DEL PRODUCTO -->
+                            <div class="field-group span-2">
+                                <label>Imagen del producto</label>
+                                <div class="image-upload-area" id="imageUploadArea" onclick="document.getElementById('f-imagen').click()">
+                                    <div class="image-upload-placeholder" id="imagePlaceholder">
+                                        <span class="upload-icon">📷</span>
+                                        <span class="upload-text">Hacé clic para subir una imagen</span>
+                                        <span class="upload-hint">JPG, PNG o WEBP · Máx. 2 MB</span>
+                                    </div>
+                                    <img id="imagePreviewThumb" class="image-thumb" src="" alt="" style="display:none">
                                 </div>
+                                <input type="file" id="f-imagen" accept="image/jpeg,image/png,image/webp,image/gif"
+                                       style="display:none" onchange="handleImageUpload(event)">
+                                <button type="button" class="btn btn-ghost btn-sm" id="removeImageBtn"
+                                        style="display:none; margin-top:8px" onclick="removeImage()">
+                                    🗑️ Quitar imagen
+                                </button>
+                                <span class="field-error" id="e-imagen"></span>
                             </div>
 
                             <div class="field-group">
@@ -185,7 +206,10 @@
                     <div class="preview-panel">
                         <p class="preview-label">Vista previa</p>
                         <div class="product-card-preview" id="cardPreview">
-                            <div class="preview-image cat-otros" id="prev-image">📦</div>
+                            <div class="preview-image cat-otros" id="prev-image">
+                                <img id="prev-img-tag" src="" alt="" style="display:none; width:100%; height:100%; object-fit:cover;">
+                                <span id="prev-emoji">📦</span>
+                            </div>
                             <div class="preview-info">
                                 <span class="preview-badge" id="prev-badge">otros</span>
                                 <h3 class="preview-name" id="prev-name">Nombre del producto</h3>
@@ -195,6 +219,28 @@
                         </div>
                         <p class="preview-note" id="prev-status-note">✅ Se mostrará en la tienda</p>
                     </div>
+                </div>
+            </section>
+
+            <!-- VISTA: PEDIDOS PENDIENTES -->
+            <section class="view" id="view-pendientes" style="display:none">
+                <div class="orders-header">
+                    <h2 class="orders-title">🕐 Pedidos pendientes</h2>
+                    <button class="btn btn-ghost" onclick="loadPedidos('pendiente')">↻ Actualizar</button>
+                </div>
+                <div id="listaPendientes" class="orders-grid">
+                    <div class="orders-loading">Cargando pedidos…</div>
+                </div>
+            </section>
+
+            <!-- VISTA: PEDIDOS ENTREGADOS -->
+            <section class="view" id="view-entregados" style="display:none">
+                <div class="orders-header">
+                    <h2 class="orders-title">✅ Pedidos entregados</h2>
+                    <button class="btn btn-ghost" onclick="loadPedidos('entregado')">↻ Actualizar</button>
+                </div>
+                <div id="listaEntregados" class="orders-grid">
+                    <div class="orders-loading">Cargando pedidos…</div>
                 </div>
             </section>
 

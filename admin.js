@@ -2,21 +2,15 @@
    SUPERMERCADO LÍDER — Panel Admin
    ===================================================== */
 
-const API_URL   = 'api.php/productos';  // ← ajustá si tu servidor tiene otro path
-const ADMIN_KEY = 'lider2024';          // ← debe coincidir con api.php
-
-const EMOJIS = {
-    frutas:   ['🍎','🍌','🍇','🍊','🍓','🍒','🍑','🥭','🍍','🥝','🍋','🍈'],
-    verduras: ['🥬','🍅','🥕','🥦','🌽','🥑','🧅','🧄','🥒','🫑','🍆','🥔'],
-    bebidas:  ['🥛','🧃','🥤','☕','🍵','🧋','🍶','🫖','🧉','🍺','🍷','🫗'],
-    limpieza: ['🧴','🧪','🧻','🧹','🧺','🪣','🫧','🧽','🪥','🗑️'],
-    otros:    ['📦','🛒','🏷️','🎁','🛍️','🪴','🐾','🍫','🍬','🍞'],
-};
+const API_URL   = 'api.php/productos';
+const API_PEDIDOS = 'api.php/pedidos';
+const ADMIN_KEY = 'lider2024';
 
 let products    = [];
 let editingId   = null;
 let confirmCb   = null;
 let isLoggedIn  = false;
+let currentImageBase64 = '';   // imagen seleccionada en base64
 
 /* =====================================================
    AUTH
@@ -26,23 +20,21 @@ function login() {
     const key = document.getElementById('adminKey').value.trim();
     if (!key) return;
 
-    // Verificamos con una petición real a la API
     fetch(`${API_URL}/0`, {
         method: 'GET',
         headers: { 'X-Admin-Key': key }
     }).then(async () => {
-        // Cualquier respuesta (incluso 404) con status != 401 = clave válida
         isLoggedIn = true;
         sessionStorage.setItem('adminKey', key);
         document.getElementById('loginOverlay').style.display = 'none';
         document.getElementById('adminLayout').style.display  = 'flex';
         loadProducts();
+        loadPedidosBadge();
     }).catch(() => {
         showLoginError('No se pudo conectar con el servidor.');
     });
 }
 
-// Atajo: Enter en el campo de clave
 document.getElementById('adminKey').addEventListener('keydown', e => {
     if (e.key === 'Enter') login();
 });
@@ -62,11 +54,8 @@ function getKey() {
     return sessionStorage.getItem('adminKey') || ADMIN_KEY;
 }
 
-// Auto-login si ya hay sesión
 window.addEventListener('DOMContentLoaded', () => {
-    buildEmojiPicker();
     updatePreview();
-
     const saved = sessionStorage.getItem('adminKey');
     if (saved) {
         document.getElementById('adminKey').value = saved;
@@ -90,8 +79,20 @@ async function apiFetch(path, options = {}) {
     return data.data;
 }
 
+async function apiPedidosFetch(path, options = {}) {
+    const headers = {
+        'Content-Type': 'application/json',
+        'X-Admin-Key': getKey(),
+        ...(options.headers || {}),
+    };
+    const res = await fetch(`${API_PEDIDOS}${path}`, { ...options, headers });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Error desconocido');
+    return data.data;
+}
+
 /* =====================================================
-   CARGA Y RENDER
+   CARGA Y RENDER DE PRODUCTOS
    ===================================================== */
 
 async function loadProducts() {
@@ -111,18 +112,23 @@ function renderTable(list) {
         return;
     }
 
-    tbody.innerHTML = list.map(p => `
+    tbody.innerHTML = list.map(p => {
+        const isImg = p.icono && (p.icono.startsWith('data:') || p.icono.startsWith('http'));
+        const imgHtml = isImg
+            ? `<img src="${escHtml(p.icono)}" alt="${escHtml(p.nombre)}" class="cell-img">`
+            : p.icono;
+        return `
         <tr>
             <td>
                 <div class="cell-product">
-                    <div class="cell-icon cat-${p.categoria}">${p.icono}</div>
+                    <div class="cell-icon cat-${p.categoria}">${imgHtml}</div>
                     <div>
                         <div class="cell-name">${escHtml(p.nombre)}</div>
                         <div class="cell-id">#${p.id}</div>
                     </div>
                 </div>
             </td>
-            <td><span class="badge">${p.categoria}</span></td>
+            <td><span class="badge">${catLabel(p.categoria)}</span></td>
             <td><strong>$${Number(p.precio).toLocaleString('es-AR')}</strong></td>
             <td>
                 <span class="badge ${p.activo == 1 ? 'badge-activo' : 'badge-inactivo'}">
@@ -136,7 +142,16 @@ function renderTable(list) {
                 </div>
             </td>
         </tr>
-    `).join('');
+        `;
+    }).join('');
+}
+
+function catLabel(cat) {
+    const labels = {
+        frutas: '🍎 Frutas', verduras: '🥬 Verduras', bebidas: '🥤 Bebidas',
+        limpieza: '🧴 Limpieza', panaderia: '🍞 Panadería', otros: '📦 Otros'
+    };
+    return labels[cat] || cat;
 }
 
 function updateStats(list) {
@@ -175,12 +190,26 @@ function setView(view) {
     if (el) el.style.display = 'block';
     if (navEl) navEl.classList.add('active');
 
-    const titles = { productos: 'Productos', nuevo: editingId ? 'Editar producto' : 'Nuevo producto' };
+    const titles = {
+        productos:  'Productos',
+        nuevo:      editingId ? 'Editar producto' : 'Nuevo producto',
+        pendientes: 'Pedidos pendientes',
+        entregados: 'Pedidos entregados',
+    };
     document.getElementById('topbarTitle').textContent = titles[view] || '';
+
+    // Ocultar botón "+ Nuevo producto" en vistas de pedidos
+    const topbarActions = document.querySelector('.topbar-actions');
+    if (topbarActions) {
+        topbarActions.style.display = (view === 'pendientes' || view === 'entregados') ? 'none' : '';
+    }
+
+    if (view === 'pendientes') loadPedidos('pendiente');
+    if (view === 'entregados') loadPedidos('entregado');
 }
 
 /* =====================================================
-   FORMULARIO
+   FORMULARIO PRODUCTO
    ===================================================== */
 
 function openEdit(id) {
@@ -192,12 +221,19 @@ function openEdit(id) {
     document.getElementById('f-nombre').value    = p.nombre;
     document.getElementById('f-precio').value    = p.precio;
     document.getElementById('f-categoria').value = p.categoria;
-    document.getElementById('f-icono').value     = p.icono;
     document.getElementById('f-activo').checked  = p.activo == 1;
-    document.getElementById('formTitle').textContent   = 'Editar producto';
-    document.getElementById('submitBtn').textContent   = 'Guardar cambios';
+    document.getElementById('formTitle').textContent = 'Editar producto';
+    document.getElementById('submitBtn').textContent = 'Guardar cambios';
 
-    buildEmojiPicker(p.categoria);
+    // Cargar imagen existente
+    if (p.icono && (p.icono.startsWith('data:') || p.icono.startsWith('http'))) {
+        currentImageBase64 = p.icono;
+        showImagePreview(p.icono);
+    } else {
+        currentImageBase64 = '';
+        clearImagePreview();
+    }
+
     updatePreview();
     setView('nuevo');
 }
@@ -209,12 +245,14 @@ function cancelForm() {
 
 function resetForm() {
     editingId = null;
-    ['f-nombre','f-precio','f-icono'].forEach(id => document.getElementById(id).value = '');
+    currentImageBase64 = '';
+    ['f-nombre', 'f-precio'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('f-categoria').value = '';
     document.getElementById('f-activo').checked  = true;
     document.getElementById('formTitle').textContent = 'Nuevo producto';
     document.getElementById('submitBtn').textContent = 'Guardar producto';
     clearErrors();
+    clearImagePreview();
     updatePreview();
 }
 
@@ -224,19 +262,24 @@ async function submitForm() {
     const nombre    = document.getElementById('f-nombre').value.trim();
     const precio    = parseFloat(document.getElementById('f-precio').value);
     const categoria = document.getElementById('f-categoria').value;
-    const icono     = document.getElementById('f-icono').value.trim() || '📦';
     const activo    = document.getElementById('f-activo').checked ? 1 : 0;
 
-    let valid = true;
+    // El icono es la imagen en base64 o un emoji por defecto según categoría
+    const defaultEmojis = {
+        frutas: '🍎', verduras: '🥬', bebidas: '🥤',
+        limpieza: '🧴', panaderia: '🍞', otros: '📦'
+    };
+    const icono = currentImageBase64 || defaultEmojis[categoria] || '📦';
 
-    if (!nombre) { setError('e-nombre', 'El nombre es obligatorio.'); valid = false; }
-    if (!precio || precio <= 0) { setError('e-precio', 'Ingresá un precio válido.'); valid = false; }
-    if (!categoria) { setError('e-categoria', 'Seleccioná una categoría.'); valid = false; }
+    let valid = true;
+    if (!nombre)              { setError('e-nombre',    'El nombre es obligatorio.');     valid = false; }
+    if (!precio || precio <= 0) { setError('e-precio',  'Ingresá un precio válido.');     valid = false; }
+    if (!categoria)           { setError('e-categoria', 'Seleccioná una categoría.');     valid = false; }
     if (!valid) return;
 
     const body = { nombre, precio, categoria, icono, activo };
     const btn  = document.getElementById('submitBtn');
-    btn.disabled = true;
+    btn.disabled    = true;
     btn.textContent = 'Guardando…';
 
     try {
@@ -253,7 +296,7 @@ async function submitForm() {
     } catch (err) {
         showToast('Error: ' + err.message, true);
     } finally {
-        btn.disabled = false;
+        btn.disabled    = false;
         btn.textContent = editingId ? 'Guardar cambios' : 'Guardar producto';
     }
 }
@@ -264,11 +307,67 @@ function setError(id, msg) {
 }
 
 function clearErrors() {
-    ['e-nombre','e-precio','e-categoria'].forEach(id => setError(id, ''));
+    ['e-nombre', 'e-precio', 'e-categoria', 'e-imagen'].forEach(id => setError(id, ''));
 }
 
 /* =====================================================
-   ELIMINAR
+   MANEJO DE IMAGEN
+   ===================================================== */
+
+function handleImageUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+        setError('e-imagen', 'La imagen no puede superar 2 MB.');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        currentImageBase64 = e.target.result;
+        showImagePreview(currentImageBase64);
+        updatePreview();
+    };
+    reader.readAsDataURL(file);
+}
+
+function showImagePreview(src) {
+    const placeholder = document.getElementById('imagePlaceholder');
+    const thumb       = document.getElementById('imagePreviewThumb');
+    const removeBtn   = document.getElementById('removeImageBtn');
+    const area        = document.getElementById('imageUploadArea');
+
+    placeholder.style.display = 'none';
+    thumb.src                 = src;
+    thumb.style.display       = 'block';
+    removeBtn.style.display   = 'inline-flex';
+    area.classList.add('has-image');
+}
+
+function clearImagePreview() {
+    const placeholder = document.getElementById('imagePlaceholder');
+    const thumb       = document.getElementById('imagePreviewThumb');
+    const removeBtn   = document.getElementById('removeImageBtn');
+    const area        = document.getElementById('imageUploadArea');
+    const fileInput   = document.getElementById('f-imagen');
+
+    placeholder.style.display = 'flex';
+    thumb.style.display       = 'none';
+    thumb.src                 = '';
+    removeBtn.style.display   = 'none';
+    area.classList.remove('has-image');
+    if (fileInput) fileInput.value = '';
+}
+
+function removeImage() {
+    currentImageBase64 = '';
+    clearImagePreview();
+    updatePreview();
+}
+
+/* =====================================================
+   ELIMINAR PRODUCTO
    ===================================================== */
 
 function confirmDelete(id, nombre) {
@@ -298,32 +397,47 @@ function closeConfirm() {
    PREVIEW EN TIEMPO REAL
    ===================================================== */
 
-['f-nombre','f-precio','f-categoria','f-icono'].forEach(id => {
+['f-nombre', 'f-precio', 'f-categoria'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', updatePreview);
-    if (el?.tagName === 'SELECT') el.addEventListener('change', () => {
-        buildEmojiPicker(el.value);
-        updatePreview();
-    });
+    if (el?.tagName === 'SELECT') el.addEventListener('change', updatePreview);
 });
 
 function updatePreview() {
     const nombre    = document.getElementById('f-nombre')?.value   || 'Nombre del producto';
     const precio    = parseFloat(document.getElementById('f-precio')?.value) || 0;
     const categoria = document.getElementById('f-categoria')?.value || 'otros';
-    const icono     = document.getElementById('f-icono')?.value     || '📦';
     const activo    = document.getElementById('f-activo')?.checked;
 
-    const img  = document.getElementById('prev-image');
+    const defaultEmojis = {
+        frutas: '🍎', verduras: '🥬', bebidas: '🥤',
+        limpieza: '🧴', panaderia: '🍞', otros: '📦'
+    };
+
+    const img     = document.getElementById('prev-image');
+    const imgTag  = document.getElementById('prev-img-tag');
+    const emoji   = document.getElementById('prev-emoji');
+
     if (img) {
-        img.textContent = icono || '📦';
-        img.className   = `preview-image cat-${categoria || 'otros'}`;
+        img.className = `preview-image cat-${categoria || 'otros'}`;
+    }
+
+    if (imgTag && emoji) {
+        if (currentImageBase64) {
+            imgTag.src           = currentImageBase64;
+            imgTag.style.display = 'block';
+            emoji.style.display  = 'none';
+        } else {
+            imgTag.style.display = 'none';
+            emoji.textContent    = defaultEmojis[categoria] || '📦';
+            emoji.style.display  = 'block';
+        }
     }
 
     const el = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
     el('prev-name',  nombre || 'Nombre del producto');
     el('prev-price', precio ? `$${precio.toLocaleString('es-AR')}` : '$0');
-    el('prev-badge', categoria || 'otros');
+    el('prev-badge', catLabel(categoria));
 
     const note = document.getElementById('prev-status-note');
     if (note) {
@@ -336,27 +450,148 @@ function updatePreview() {
 }
 
 /* =====================================================
-   EMOJI PICKER
+   PEDIDOS
    ===================================================== */
 
-function buildEmojiPicker(cat = '') {
-    const picker = document.getElementById('emojiPicker');
-    if (!picker) return;
+async function loadPedidos(estado) {
+    const containerId = estado === 'pendiente' ? 'listaPendientes' : 'listaEntregados';
+    const container   = document.getElementById(containerId);
+    if (!container) return;
 
-    const list = cat && EMOJIS[cat] ? EMOJIS[cat] : Object.values(EMOJIS).flat().slice(0, 24);
-    const current = document.getElementById('f-icono')?.value;
+    container.innerHTML = '<div class="orders-loading">Cargando pedidos…</div>';
 
-    picker.innerHTML = list.map(e => `
-        <button class="emoji-opt ${e === current ? 'selected' : ''}"
-                onclick="selectEmoji('${e}')" type="button">${e}</button>
-    `).join('');
+    try {
+        const pedidos = await apiPedidosFetch(`?estado=${estado}`, { method: 'GET' });
+        renderPedidos(pedidos, estado, container);
+        if (estado === 'pendiente') updateBadgePendientes(pedidos.length);
+    } catch (err) {
+        container.innerHTML = `<div class="orders-empty"><span>⚠️</span><p>Error: ${err.message}</p></div>`;
+    }
 }
 
-function selectEmoji(emoji) {
-    const input = document.getElementById('f-icono');
-    if (input) input.value = emoji;
-    buildEmojiPicker(document.getElementById('f-categoria')?.value);
-    updatePreview();
+async function loadPedidosBadge() {
+    try {
+        const pedidos = await apiPedidosFetch('?estado=pendiente', { method: 'GET' });
+        updateBadgePendientes(pedidos.length);
+    } catch (_) {}
+}
+
+function updateBadgePendientes(count) {
+    const badge = document.getElementById('badgePendientes');
+    if (!badge) return;
+    if (count > 0) {
+        badge.textContent    = count;
+        badge.style.display  = 'inline-flex';
+    } else {
+        badge.style.display  = 'none';
+    }
+}
+
+function renderPedidos(pedidos, estado, container) {
+    if (!pedidos.length) {
+        const msg = estado === 'pendiente'
+            ? 'No hay pedidos pendientes por ahora.'
+            : 'Aún no hay pedidos entregados.';
+        container.innerHTML = `
+            <div class="orders-empty">
+                <span>${estado === 'pendiente' ? '🕐' : '✅'}</span>
+                <p>${msg}</p>
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = pedidos.map(p => {
+        const fecha    = new Date(p.creado_en).toLocaleString('es-AR');
+        const items    = Array.isArray(p.items) ? p.items : [];
+        const itemsHtml = items.map(i => {
+            const isImg = i.icono && (i.icono.startsWith('data:') || i.icono.startsWith('http'));
+            const iconHtml = isImg
+                ? `<img src="${escHtml(i.icono)}" alt="${escHtml(i.nombre)}" class="order-item-img">`
+                : `<span>${i.icono || '📦'}</span>`;
+            return `
+                <div class="order-item-row">
+                    <div class="order-item-icon cat-${i.categoria || 'otros'}">${iconHtml}</div>
+                    <span class="order-item-name">${escHtml(i.nombre)}</span>
+                    <span class="order-item-qty">x${i.quantity}</span>
+                    <span class="order-item-price">$${(Number(i.precio) * i.quantity).toLocaleString('es-AR')}</span>
+                </div>`;
+        }).join('');
+
+        const actionBtn = estado === 'pendiente'
+            ? `<button class="btn btn-success" onclick="marcarEntregado(${p.id})">✅ Marcar como entregado</button>`
+            : `<button class="btn btn-ghost btn-sm" onclick="marcarPendiente(${p.id})">↩ Volver a pendiente</button>`;
+
+        const entregadoInfo = p.entregado_en
+            ? `<span class="order-meta">Entregado: ${new Date(p.entregado_en).toLocaleString('es-AR')}</span>`
+            : '';
+
+        return `
+        <div class="order-card" id="order-${p.id}">
+            <div class="order-card-header">
+                <div class="order-card-info">
+                    <span class="order-id">#${p.id}</span>
+                    <span class="order-cliente">👤 ${escHtml(p.cliente)}</span>
+                    <span class="order-meta">🕐 ${fecha}</span>
+                    ${entregadoInfo}
+                </div>
+                <span class="order-total">$${Number(p.total).toLocaleString('es-AR')}</span>
+            </div>
+            <div class="order-items">${itemsHtml}</div>
+            <div class="order-card-footer">
+                ${actionBtn}
+                <button class="btn btn-ghost btn-sm btn-icon-danger" onclick="confirmarEliminarPedido(${p.id})">🗑️ Eliminar</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+async function marcarEntregado(id) {
+    try {
+        await apiPedidosFetch(`/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ estado: 'entregado' })
+        });
+        showToast('✅ Pedido marcado como entregado.');
+        loadPedidos('pendiente');
+        loadPedidosBadge();
+    } catch (err) {
+        showToast('Error: ' + err.message, true);
+    }
+}
+
+async function marcarPendiente(id) {
+    try {
+        await apiPedidosFetch(`/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ estado: 'pendiente' })
+        });
+        showToast('↩ Pedido vuelto a pendiente.');
+        loadPedidos('entregado');
+        loadPedidosBadge();
+    } catch (err) {
+        showToast('Error: ' + err.message, true);
+    }
+}
+
+function confirmarEliminarPedido(id) {
+    document.getElementById('confirmMsg').textContent = `¿Eliminar el pedido #${id}?`;
+    document.getElementById('confirmModal').style.display = 'flex';
+    confirmCb = async () => {
+        try {
+            await apiPedidosFetch(`/${id}`, { method: 'DELETE' });
+            showToast('🗑️ Pedido eliminado.');
+            // Refrescar la vista activa
+            const viewPend = document.getElementById('view-pendientes');
+            const viewEntr = document.getElementById('view-entregados');
+            if (viewPend && viewPend.style.display !== 'none') loadPedidos('pendiente');
+            if (viewEntr && viewEntr.style.display !== 'none') loadPedidos('entregado');
+            loadPedidosBadge();
+        } catch (err) {
+            showToast('Error: ' + err.message, true);
+        }
+        closeConfirm();
+    };
+    document.getElementById('confirmBtn').onclick = confirmCb;
 }
 
 /* =====================================================

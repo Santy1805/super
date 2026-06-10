@@ -28,6 +28,27 @@ function getDB(): PDO {
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         ]);
+        // Crear tablas si no existen
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS productos (
+                id        INT AUTO_INCREMENT PRIMARY KEY,
+                nombre    VARCHAR(120) NOT NULL,
+                precio    DECIMAL(10,2) NOT NULL,
+                categoria VARCHAR(30) NOT NULL,
+                icono     TEXT NOT NULL DEFAULT '📦',
+                activo    TINYINT(1) NOT NULL DEFAULT 1
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+            CREATE TABLE IF NOT EXISTS pedidos (
+                id         INT AUTO_INCREMENT PRIMARY KEY,
+                cliente    VARCHAR(120) NOT NULL DEFAULT 'Cliente',
+                items      MEDIUMTEXT NOT NULL,
+                total      DECIMAL(10,2) NOT NULL DEFAULT 0,
+                estado     ENUM('pendiente','entregado') NOT NULL DEFAULT 'pendiente',
+                creado_en  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                entregado_en DATETIME NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ");
     }
     return $pdo;
 }
@@ -55,7 +76,7 @@ function requireAdmin(): void {
 
 // --- VALIDACIÓN PRODUCTO ---
 function validateProduct(array $data): array {
-    $categoriasValidas = ['frutas', 'verduras', 'bebidas', 'limpieza', 'otros'];
+    $categoriasValidas = ['frutas', 'verduras', 'bebidas', 'limpieza', 'panaderia', 'otros'];
 
     $nombre    = trim($data['nombre'] ?? '');
     $precio    = floatval($data['precio'] ?? 0);
@@ -76,14 +97,12 @@ $method = $_SERVER['REQUEST_METHOD'];
 $path   = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
 $parts  = explode('/', $path);
 
-// Detectar el segmento de la ruta relevante
-// Soporta tanto /api.php/productos como /productos
 $resource = '';
 $id       = null;
 
 foreach ($parts as $i => $part) {
-    if ($part === 'productos') {
-        $resource = 'productos';
+    if ($part === 'productos' || $part === 'pedidos') {
+        $resource = $part;
         $id = isset($parts[$i + 1]) && is_numeric($parts[$i + 1])
               ? (int)$parts[$i + 1]
               : null;
@@ -91,76 +110,157 @@ foreach ($parts as $i => $part) {
     }
 }
 
-// También soportar ?recurso=productos&id=1 como alternativa simple
+// Soporte alternativo con query string
 if (!$resource && isset($_GET['recurso'])) {
     $resource = $_GET['recurso'];
     $id       = isset($_GET['id']) ? (int)$_GET['id'] : null;
 }
 
-if ($resource !== 'productos') error('Ruta no encontrada.', 404);
+if (!in_array($resource, ['productos', 'pedidos'])) error('Ruta no encontrada.', 404);
 
 $db   = getDB();
 $body = json_decode(file_get_contents('php://input'), true) ?? [];
 
 // =====================================================
-//  GET /productos          → listar todos (públic)
-//  GET /productos/{id}     → obtener uno (público)
-//  POST /productos         → crear (admin)
-//  PUT /productos/{id}     → editar (admin)
-//  DELETE /productos/{id}  → eliminar (admin)
+//  PRODUCTOS
 // =====================================================
 
-if ($method === 'GET' && $id === null) {
-    // Listar productos activos (público) o todos (admin)
-    $soloActivos = !isset($_SERVER['HTTP_X_ADMIN_KEY']) || $_SERVER['HTTP_X_ADMIN_KEY'] !== ADMIN_KEY;
-    $sql = $soloActivos
-        ? 'SELECT id, nombre, precio, categoria, icono FROM productos WHERE activo = 1 ORDER BY categoria, nombre'
-        : 'SELECT * FROM productos ORDER BY categoria, nombre';
-    $stmt = $db->query($sql);
-    ok($stmt->fetchAll());
+if ($resource === 'productos') {
+
+    if ($method === 'GET' && $id === null) {
+        $soloActivos = !isset($_SERVER['HTTP_X_ADMIN_KEY']) || $_SERVER['HTTP_X_ADMIN_KEY'] !== ADMIN_KEY;
+        $sql = $soloActivos
+            ? 'SELECT id, nombre, precio, categoria, icono FROM productos WHERE activo = 1 ORDER BY categoria, nombre'
+            : 'SELECT * FROM productos ORDER BY categoria, nombre';
+        $stmt = $db->query($sql);
+        ok($stmt->fetchAll());
+    }
+
+    if ($method === 'GET' && $id !== null) {
+        $stmt = $db->prepare('SELECT * FROM productos WHERE id = ?');
+        $stmt->execute([$id]);
+        $producto = $stmt->fetch();
+        if (!$producto) error('Producto no encontrado.', 404);
+        ok($producto);
+    }
+
+    if ($method === 'POST') {
+        requireAdmin();
+        $data = validateProduct($body);
+        $stmt = $db->prepare(
+            'INSERT INTO productos (nombre, precio, categoria, icono, activo) VALUES (?, ?, ?, ?, ?)'
+        );
+        $stmt->execute([$data['nombre'], $data['precio'], $data['categoria'], $data['icono'], $data['activo']]);
+        $nuevo = $db->lastInsertId();
+        ok(['id' => (int)$nuevo, ...$data], 201);
+    }
+
+    if ($method === 'PUT' && $id !== null) {
+        requireAdmin();
+        $check = $db->prepare('SELECT id FROM productos WHERE id = ?');
+        $check->execute([$id]);
+        if (!$check->fetch()) error('Producto no encontrado.', 404);
+
+        $data = validateProduct($body);
+        $stmt = $db->prepare(
+            'UPDATE productos SET nombre=?, precio=?, categoria=?, icono=?, activo=? WHERE id=?'
+        );
+        $stmt->execute([$data['nombre'], $data['precio'], $data['categoria'], $data['icono'], $data['activo'], $id]);
+        ok(['id' => $id, ...$data]);
+    }
+
+    if ($method === 'DELETE' && $id !== null) {
+        requireAdmin();
+        $check = $db->prepare('SELECT id FROM productos WHERE id = ?');
+        $check->execute([$id]);
+        if (!$check->fetch()) error('Producto no encontrado.', 404);
+
+        $db->prepare('DELETE FROM productos WHERE id = ?')->execute([$id]);
+        ok(['eliminado' => $id]);
+    }
 }
 
-if ($method === 'GET' && $id !== null) {
-    $stmt = $db->prepare('SELECT * FROM productos WHERE id = ?');
-    $stmt->execute([$id]);
-    $producto = $stmt->fetch();
-    if (!$producto) error('Producto no encontrado.', 404);
-    ok($producto);
-}
+// =====================================================
+//  PEDIDOS
+// =====================================================
 
-if ($method === 'POST') {
-    requireAdmin();
-    $data = validateProduct($body);
-    $stmt = $db->prepare(
-        'INSERT INTO productos (nombre, precio, categoria, icono, activo) VALUES (?, ?, ?, ?, ?)'
-    );
-    $stmt->execute([$data['nombre'], $data['precio'], $data['categoria'], $data['icono'], $data['activo']]);
-    $nuevo = $db->lastInsertId();
-    ok(['id' => (int)$nuevo, ...$data], 201);
-}
+if ($resource === 'pedidos') {
 
-if ($method === 'PUT' && $id !== null) {
-    requireAdmin();
-    $check = $db->prepare('SELECT id FROM productos WHERE id = ?');
-    $check->execute([$id]);
-    if (!$check->fetch()) error('Producto no encontrado.', 404);
+    // GET /pedidos           → listar todos (admin)
+    // GET /pedidos?estado=   → filtrar por estado (admin)
+    if ($method === 'GET' && $id === null) {
+        requireAdmin();
+        $estado = $_GET['estado'] ?? null;
+        if ($estado && in_array($estado, ['pendiente', 'entregado'])) {
+            $stmt = $db->prepare('SELECT * FROM pedidos WHERE estado = ? ORDER BY creado_en DESC');
+            $stmt->execute([$estado]);
+        } else {
+            $stmt = $db->query('SELECT * FROM pedidos ORDER BY creado_en DESC');
+        }
+        $rows = $stmt->fetchAll();
+        // Decodificar items JSON
+        foreach ($rows as &$row) {
+            $row['items'] = json_decode($row['items'], true);
+        }
+        ok($rows);
+    }
 
-    $data = validateProduct($body);
-    $stmt = $db->prepare(
-        'UPDATE productos SET nombre=?, precio=?, categoria=?, icono=?, activo=? WHERE id=?'
-    );
-    $stmt->execute([$data['nombre'], $data['precio'], $data['categoria'], $data['icono'], $data['activo'], $id]);
-    ok(['id' => $id, ...$data]);
-}
+    // GET /pedidos/{id}
+    if ($method === 'GET' && $id !== null) {
+        requireAdmin();
+        $stmt = $db->prepare('SELECT * FROM pedidos WHERE id = ?');
+        $stmt->execute([$id]);
+        $pedido = $stmt->fetch();
+        if (!$pedido) error('Pedido no encontrado.', 404);
+        $pedido['items'] = json_decode($pedido['items'], true);
+        ok($pedido);
+    }
 
-if ($method === 'DELETE' && $id !== null) {
-    requireAdmin();
-    $check = $db->prepare('SELECT id FROM productos WHERE id = ?');
-    $check->execute([$id]);
-    if (!$check->fetch()) error('Producto no encontrado.', 404);
+    // POST /pedidos — crear pedido (público, desde la tienda)
+    if ($method === 'POST') {
+        $cliente = trim($body['cliente'] ?? 'Cliente');
+        $items   = $body['items'] ?? [];
+        $total   = floatval($body['total'] ?? 0);
 
-    $db->prepare('DELETE FROM productos WHERE id = ?')->execute([$id]);
-    ok(['eliminado' => $id]);
+        if (empty($items))   error('El pedido no tiene productos.');
+        if ($total <= 0)     error('El total debe ser mayor a 0.');
+        if (empty($cliente)) $cliente = 'Cliente';
+
+        $stmt = $db->prepare(
+            'INSERT INTO pedidos (cliente, items, total, estado) VALUES (?, ?, ?, "pendiente")'
+        );
+        $stmt->execute([$cliente, json_encode($items, JSON_UNESCAPED_UNICODE), $total]);
+        ok(['id' => (int)$db->lastInsertId(), 'cliente' => $cliente, 'total' => $total], 201);
+    }
+
+    // PUT /pedidos/{id} — marcar como entregado (admin)
+    if ($method === 'PUT' && $id !== null) {
+        requireAdmin();
+        $check = $db->prepare('SELECT id FROM pedidos WHERE id = ?');
+        $check->execute([$id]);
+        if (!$check->fetch()) error('Pedido no encontrado.', 404);
+
+        $nuevoEstado = trim($body['estado'] ?? 'entregado');
+        if (!in_array($nuevoEstado, ['pendiente', 'entregado'])) error('Estado inválido.');
+
+        if ($nuevoEstado === 'entregado') {
+            $stmt = $db->prepare('UPDATE pedidos SET estado="entregado", entregado_en=NOW() WHERE id=?');
+        } else {
+            $stmt = $db->prepare('UPDATE pedidos SET estado="pendiente", entregado_en=NULL WHERE id=?');
+        }
+        $stmt->execute([$id]);
+        ok(['id' => $id, 'estado' => $nuevoEstado]);
+    }
+
+    // DELETE /pedidos/{id} — eliminar pedido (admin)
+    if ($method === 'DELETE' && $id !== null) {
+        requireAdmin();
+        $check = $db->prepare('SELECT id FROM pedidos WHERE id = ?');
+        $check->execute([$id]);
+        if (!$check->fetch()) error('Pedido no encontrado.', 404);
+        $db->prepare('DELETE FROM pedidos WHERE id = ?')->execute([$id]);
+        ok(['eliminado' => $id]);
+    }
 }
 
 error('Método no permitido.', 405);
