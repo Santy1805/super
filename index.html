@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supermercado Líder</title>
+    <link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+
+    <!-- HEADER -->
+    <header>
+        <div class="header-left">
+            <img src="imagen/supertio.jpg"
+                 alt="Logo Supermercado Líder" class="header-logo" id="userLogo">
+            <div class="logo-text">
+                <span class="logo-sup">Supermercado</span>
+                <span class="logo-highlight">LÍDER</span>
+            </div>
+        </div>
+
+        <div class="header-center">
+            <div class="search-wrapper">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="searchInput" class="search-input"
+                       placeholder="Buscar productos..." autocomplete="off">
+            </div>
+        </div>
+
+        <div class="header-right">
+            <button class="cart-btn" onclick="toggleCart()" aria-label="Ver carrito">
+                🛒 Carrito
+                <span class="cart-count" id="cartCount">0</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- HERO -->
+    <section class="hero" aria-label="Bienvenida">
+        <div class="hero-text">
+            <p class="hero-eyebrow">Ofertas del día</p>
+            <h1>Frescos, rápidos<br>y <em>al mejor precio</em></h1>
+            <p class="hero-sub">Frutas, verduras, bebidas y más — todo en un lugar.</p>
+        </div>
+        <div class="hero-badge" aria-hidden="true">
+            <span class="hero-badge-num" id="heroBadgeNum">12</span>
+            <span class="hero-badge-label">Productos<br>disponibles</span>
+        </div>
+    </section>
+
+    <!-- FILTROS -->
+    <nav class="filters-bar" aria-label="Categorías">
+        <button class="filter-btn active" onclick="filterCategory('all')" data-cat="all">
+            <span class="filter-icon">🏪</span> Todos
+            <span class="filter-count" id="count-all">12</span>
+        </button>
+        <button class="filter-btn" onclick="filterCategory('frutas')" data-cat="frutas">
+            <span class="filter-icon">🍎</span> Frutas
+            <span class="filter-count" id="count-frutas">3</span>
+        </button>
+        <button class="filter-btn" onclick="filterCategory('verduras')" data-cat="verduras">
+            <span class="filter-icon">🥬</span> Verduras
+            <span class="filter-count" id="count-verduras">3</span>
+        </button>
+        <button class="filter-btn" onclick="filterCategory('bebidas')" data-cat="bebidas">
+            <span class="filter-icon">🥤</span> Bebidas
+            <span class="filter-count" id="count-bebidas">3</span>
+        </button>
+        <button class="filter-btn" onclick="filterCategory('limpieza')" data-cat="limpieza">
+            <span class="filter-icon">🧴</span> Limpieza
+            <span class="filter-count" id="count-limpieza">3</span>
+        </button>
+    </nav>
+
+    <!-- PRODUCTOS -->
+    <main class="products-section">
+        <div class="section-header">
+            <h2 class="section-title" id="sectionTitle">Todos los productos</h2>
+            <span class="section-count" id="sectionCount">12 productos</span>
+        </div>
+        <div class="products-grid" id="productsContainer"></div>
+    </main>
+
+    <!-- DRAWER CARRITO -->
+    <div class="drawer-overlay" id="drawerOverlay" onclick="toggleCart()"></div>
+    <aside class="cart-drawer" id="cartDrawer" aria-label="Carrito de compras">
+        <div class="drawer-header">
+            <h2 class="drawer-title">
+                🛒 Tu carrito
+                <span class="drawer-title-count" id="drawerCount">0 ítems</span>
+            </h2>
+            <button class="drawer-close" onclick="toggleCart()" aria-label="Cerrar carrito">✕</button>
+        </div>
+        <div class="drawer-items" id="cartItemsContainer"></div>
+        <div class="drawer-footer" id="drawerFooter" style="display:none">
+            <div class="cart-summary">
+                <span class="cart-summary-label">Total a pagar</span>
+                <span class="cart-total">$<span id="cartTotal">0</span></span>
+            </div>
+            <button class="pay-btn" onclick="checkout()">✅ Finalizar compra</button>
+        </div>
+    </aside>
+
+    <!-- TOASTS -->
+    <div id="toastContainer" class="toast-container"></div>
+
+
+
+
+
+    <footer class="super-footer">
+    <div class="footer-container">
+        <div class="footer-section brand-info">
+            <h3 class="footer-logo">Super<span>Cerca</span></h3>
+            <p class="tagline">Frescura y ahorro en cada pasillo.</p>
+            <div class="schedule">
+                <h4>Horarios de Atención</h4>
+                <p>Lunes a Sábados: 08:00 - 21:30</p>
+                <p>Domingos y Feriados: 09:00 - 14:00</p>
+            </div>
+        </div>
+
+        <div class="footer-section links-utility">
+            <h4>Pasillos Virtuales</h4>
+            <ul>
+                <li><a href="#ofertas">Ofertas de la Semana</a></li>
+                <li><a href="#almacen">Almacén y Bebidas</a></li>
+                <li><a href="#frescos">Carnicería y Verdulería</a></li>
+                <li><a href="#limpieza">Limpieza e Higiene</a></li>
+            </ul>
+        </div>
+
+        <div class="footer-section links-utility">
+            <h4>Atención al Cliente</h4>
+            <ul>
+                <li><a href="#contacto">Contacto y Sugerencias</a></li>
+                <li><a href="#sucursales">Nuestras Sucursales</a></li>
+                <li><a href="#defensa">Defensa del Consumidor</a></li>
+                <li><a href="#faq">Preguntas Frecuentes</a></li>
+            </ul>
+        </div>
+
+        <div class="footer-section newsletter">
+            <h4>¿Querés recibir las ofertas?</h4>
+            <p>Dejanos tu correo y no te pierdas ningún folleto.</p>
+            <form class="footer-form" onsubmit="return false;">
+                <input type="email" placeholder="Tu email aquí" required>
+                <button type="submit">Suscribirse</button>
+            </form>
+            <div class="social-icons">
+                <a href="#" aria-label="Facebook"><i class="fab fa-facebook"></i></a>
+                <a href="#" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
+                <a href="#" aria-label="WhatsApp"><i class="fab fa-whatsapp"></i></a>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer-bottom">
+        <p>&copy; 2026 SuperCerca. Todos los derechos reservados.</p>
+        <div class="payment-methods">
+            <span><i class="fab fa-cc-visa" title="Visa"></i></span>
+            <span><i class="fab fa-cc-mastercard" title="Mastercard"></i></span>
+            <span><i class="fas fa-money-bill-wave" title="Efectivo / Débito"></i></span>
+            <span><i class="fas fa-qrcode" title="Mercado Pago / QR"></i></span>
+        </div>
+    </div>
+</footer>
+ <script src="script.js"></script>
+</body>
+</html>

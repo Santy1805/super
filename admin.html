@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Admin — Supermercado Líder</title>
+    <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+    <!-- LOGIN OVERLAY -->
+    <div class="login-overlay" id="loginOverlay">
+        <div class="login-card">
+            <div class="login-logo">🛒</div>
+            <h1>Panel Admin</h1>
+            <p class="login-sub">Supermercado Líder</p>
+            <div class="field-group">
+                <label for="adminKey">Clave de acceso</label>
+                <input type="password" id="adminKey" placeholder="••••••••" autocomplete="current-password">
+                <span class="field-error" id="loginError"></span>
+            </div>
+            <button class="btn btn-primary btn-full" onclick="login()">Ingresar</button>
+        </div>
+    </div>
+
+    <!-- LAYOUT PRINCIPAL -->
+    <div class="admin-layout" id="adminLayout" style="display:none">
+
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <span class="brand-icon">🛒</span>
+                <div>
+                    <div class="brand-name">Líder</div>
+                    <div class="brand-role">Panel Admin</div>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <button class="nav-item active" onclick="setView('productos')" id="nav-productos">
+                    <span class="nav-icon">📦</span> Productos
+                </button>
+                <button class="nav-item" onclick="setView('nuevo')" id="nav-nuevo">
+                    <span class="nav-icon">➕</span> Nuevo producto
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button class="nav-item" onclick="logout()">
+                    <span class="nav-icon">🚪</span> Cerrar sesión
+                </button>
+                <a class="nav-item" href="index.html" target="_blank">
+                    <span class="nav-icon">🌐</span> Ver tienda
+                </a>
+            </div>
+        </aside>
+
+        <!-- MAIN -->
+        <main class="admin-main">
+
+            <!-- TOPBAR -->
+            <header class="topbar">
+                <div class="topbar-title" id="topbarTitle">Productos</div>
+                <div class="topbar-actions">
+                    <button class="btn btn-primary" onclick="setView('nuevo')">
+                        + Nuevo producto
+                    </button>
+                </div>
+            </header>
+
+            <!-- VISTA: LISTA DE PRODUCTOS -->
+            <section class="view" id="view-productos">
+                <div class="stats-row" id="statsRow">
+                    <div class="stat-card">
+                        <span class="stat-num" id="stat-total">—</span>
+                        <span class="stat-label">Total productos</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-num" id="stat-activos">—</span>
+                        <span class="stat-label">Activos</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-num" id="stat-inactivos">—</span>
+                        <span class="stat-label">Ocultos</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-num" id="stat-cats">—</span>
+                        <span class="stat-label">Categorías</span>
+                    </div>
+                </div>
+
+                <div class="table-toolbar">
+                    <input type="text" class="search-input" id="tableSearch"
+                           placeholder="Buscar producto..." oninput="filterTable()">
+                    <select class="select-input" id="tableCatFilter" onchange="filterTable()">
+                        <option value="">Todas las categorías</option>
+                        <option value="frutas">🍎 Frutas</option>
+                        <option value="verduras">🥬 Verduras</option>
+                        <option value="bebidas">🥤 Bebidas</option>
+                        <option value="limpieza">🧴 Limpieza</option>
+                        <option value="otros">📦 Otros</option>
+                    </select>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="products-table" id="productsTable">
+                        <thead>
+                            <tr>
+                                <th>Producto</th>
+                                <th>Categoría</th>
+                                <th>Precio</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <tr><td colspan="5" class="table-loading">Cargando productos…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- VISTA: FORMULARIO -->
+            <section class="view" id="view-nuevo" style="display:none">
+                <div class="form-layout">
+                    <div class="form-card">
+                        <h2 class="form-title" id="formTitle">Nuevo producto</h2>
+
+                        <div class="form-grid">
+                            <div class="field-group span-2">
+                                <label for="f-nombre">Nombre del producto</label>
+                                <input type="text" id="f-nombre" placeholder="Ej: Manzanas Rojas x Kg" maxlength="120">
+                                <span class="field-error" id="e-nombre"></span>
+                            </div>
+
+                            <div class="field-group">
+                                <label for="f-precio">Precio (ARS)</label>
+                                <input type="number" id="f-precio" placeholder="0" min="1" step="1">
+                                <span class="field-error" id="e-precio"></span>
+                            </div>
+
+                            <div class="field-group">
+                                <label for="f-categoria">Categoría</label>
+                                <select id="f-categoria">
+                                    <option value="">— Seleccioná —</option>
+                                    <option value="frutas">🍎 Frutas</option>
+                                    <option value="verduras">🥬 Verduras</option>
+                                    <option value="bebidas">🥤 Bebidas</option>
+                                    <option value="limpieza">🧴 Limpieza</option>
+                                    <option value="otros">📦 Otros</option>
+                                </select>
+                                <span class="field-error" id="e-categoria"></span>
+                            </div>
+
+                            <div class="field-group">
+                                <label for="f-icono">Ícono (emoji)</label>
+                                <div class="emoji-field">
+                                    <input type="text" id="f-icono" placeholder="📦" maxlength="4"
+                                           oninput="updatePreview()">
+                                    <div class="emoji-picker" id="emojiPicker"></div>
+                                </div>
+                            </div>
+
+                            <div class="field-group">
+                                <label>Estado</label>
+                                <label class="toggle-label">
+                                    <input type="checkbox" id="f-activo" checked onchange="updatePreview()">
+                                    <span class="toggle-track">
+                                        <span class="toggle-thumb"></span>
+                                    </span>
+                                    <span class="toggle-text" id="toggleText">Visible en la tienda</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button class="btn btn-ghost" onclick="cancelForm()">Cancelar</button>
+                            <button class="btn btn-primary" id="submitBtn" onclick="submitForm()">
+                                Guardar producto
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- PREVIEW -->
+                    <div class="preview-panel">
+                        <p class="preview-label">Vista previa</p>
+                        <div class="product-card-preview" id="cardPreview">
+                            <div class="preview-image cat-otros" id="prev-image">📦</div>
+                            <div class="preview-info">
+                                <span class="preview-badge" id="prev-badge">otros</span>
+                                <h3 class="preview-name" id="prev-name">Nombre del producto</h3>
+                                <p class="preview-price" id="prev-price">$0</p>
+                                <div class="preview-btn">+ Agregar</div>
+                            </div>
+                        </div>
+                        <p class="preview-note" id="prev-status-note">✅ Se mostrará en la tienda</p>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- TOAST -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- MODAL CONFIRMACIÓN -->
+    <div class="modal-overlay" id="confirmModal" style="display:none">
+        <div class="confirm-card">
+            <p class="confirm-icon">🗑️</p>
+            <h3 id="confirmMsg">¿Eliminar este producto?</h3>
+            <p class="confirm-sub">Esta acción no se puede deshacer.</p>
+            <div class="confirm-actions">
+                <button class="btn btn-ghost" onclick="closeConfirm()">Cancelar</button>
+                <button class="btn btn-danger" id="confirmBtn">Eliminar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="admin.js"></script>
+</body>
+</html>
